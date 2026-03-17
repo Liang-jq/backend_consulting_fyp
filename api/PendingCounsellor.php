@@ -5,7 +5,14 @@ header("Content-Type: application/json");
 
 require_once '../db.php';
 
-$result = $conn->query("SELECT id,name,matric_number,email,phone,year,languages,description FROM counsellor WHERE status='pending'");
+$sql = "
+SELECT c.id, u.name, u.email,c.matric_number, c.phone, c.year,c.languages, c.description
+FROM counsellor c
+JOIN user u ON c.user_id = u.id
+WHERE c.status = 'pending'
+";
+
+$result = $conn->query($sql);
 
 $data = [];
 

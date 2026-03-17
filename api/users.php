@@ -1,38 +1,31 @@
 <?php
-// C:\xampp\htdocs\backend_consult\api\users.php
-
-// Allow CORS for React frontend
 header("Access-Control-Allow-Origin: http://localhost:5173");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
+header("Content-Type: application/json");
 
-
-// Handle preflight request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-header('Content-Type: application/json');
-
-// Include database connection
-require_once '../db.php';  // Make sure path is correct
+require_once '../db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
-$request = explode('/', trim($_SERVER['PATH_INFO'] ?? '', '/'));
-$id = $request[0] ?? null;
+$id = $_GET['id'] ?? null; // use query string ?id=1 instead of PATH_INFO
 
 switch ($method) {
+
     case 'GET':
         if ($id) {
-            $stmt = $conn->prepare("SELECT id, name, email FROM user WHERE id=?");
+            $stmt = $conn->prepare("SELECT id, name, email, role FROM user WHERE id=?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             $result = $stmt->get_result();
             $user = $result->fetch_assoc();
             echo json_encode($user ?: ['message' => 'User not found']);
         } else {
-            $result = $conn->query("SELECT id, name, email FROM user");
+            $result = $conn->query("SELECT id, name, email, role FROM user");
             $users = $result->fetch_all(MYSQLI_ASSOC);
             echo json_encode($users);
         }
@@ -45,6 +38,8 @@ switch ($method) {
             exit;
         }
 
+        $role = $data['role'] ?? null; // NULL, 1, or 2
+
         // Check duplicate email
         $stmt = $conn->prepare("SELECT id FROM user WHERE email=?");
         $stmt->bind_param("s", $data['email']);
@@ -55,31 +50,56 @@ switch ($method) {
             exit;
         }
 
-        $stmt = $conn->prepare("INSERT INTO user (name, email, password, created, updated) VALUES (?, ?, ?, NOW(), NOW())");
         $hashedPassword = password_hash($data['password'], PASSWORD_DEFAULT);
-        $stmt->bind_param("sss", $data['name'], $data['email'], $hashedPassword);
+        $stmt = $conn->prepare("INSERT INTO user (name, email, password, role, created, updated) VALUES (?, ?, ?, ?, NOW(), NOW())");
+        $stmt->bind_param("sssi", $data['name'], $data['email'], $hashedPassword, $role);
         $stmt->execute();
 
-        echo json_encode(['message' => 'User created', 'id' => $stmt->insert_id]);
+        $user_id = $stmt->insert_id;
+
+        // Optional: create extra row in counsellor_details if role=2
+        if ($role == 2) {
+            $languages = !empty($data['languages']) ? implode(",", $data['languages']) : null;
+            $description = $data['description'] ?? null;
+
+            $stmt2 = $conn->prepare("INSERT INTO counsellor (user_id, languages, description) VALUES (?, ?, ?)");
+            $stmt2->bind_param("iss", $user_id, $languages, $description);
+            $stmt2->execute();
+        }
+
+        echo json_encode(['message' => 'User created', 'user_id' => $user_id]);
         break;
 
-    case 'UPDATE':
+    case 'PUT':
+        $data = json_decode(file_get_contents('php://input'), true);
         if (!$id) {
             echo json_encode(['error' => 'ID required']);
             exit;
         }
-        $data = json_decode(file_get_contents('php://input'), true);
 
-        $stmt = $conn->prepare("UPDATE user SET name=?, email=?, password=?, updated=NOW() WHERE id=?");
-        $hashedPassword = isset($data['password']) ? password_hash($data['password'], PASSWORD_DEFAULT) : null;
-        $stmt->bind_param(
-            "sssi",
-            $data['name'] ?? null,
-            $data['email'] ?? null,
-            $hashedPassword,
-            $id
-        );
+        $fields = [];
+        $types = '';
+        $values = [];
+
+        if (isset($data['name'])) { $fields[] = "name=?"; $types .= 's'; $values[] = $data['name']; }
+        if (isset($data['email'])) { $fields[] = "email=?"; $types .= 's'; $values[] = $data['email']; }
+        if (isset($data['password'])) { $fields[] = "password=?"; $types .= 's'; $values[] = password_hash($data['password'], PASSWORD_DEFAULT); }
+        if (isset($data['role'])) { $fields[] = "role=?"; $types .= 'i'; $values[] = $data['role']; }
+
+        if (empty($fields)) {
+            echo json_encode(['error' => 'No fields to update']);
+            exit;
+        }
+
+        $fields[] = "updated=NOW()";
+        $sql = "UPDATE user SET " . implode(',', $fields) . " WHERE id=?";
+        $types .= 'i';
+        $values[] = $id;
+
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$values);
         $stmt->execute();
+
         echo json_encode(['message' => 'User updated']);
         break;
 
@@ -88,29 +108,22 @@ switch ($method) {
             echo json_encode(['error' => 'ID required']);
             exit;
         }
+
+        // Optionally delete role-specific table first
+        $stmt = $conn->prepare("DELETE FROM counsellor WHERE user_id=?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+
+        // Delete from users
         $stmt = $conn->prepare("DELETE FROM user WHERE id=?");
         $stmt->bind_param("i", $id);
         $stmt->execute();
+
         echo json_encode(['message' => 'User deleted']);
-        exit;
         break;
 
     default:
         echo json_encode(['message' => 'Method not allowed']);
         break;
 }
-
-
-// // ---------------- POST ----------------
-// if ($method === 'POST') {
-
-//     exit;
-// }
-
-// if ($method === 'PUT') {
-// }
-
-// if ($method === 'DELETE') {
-// }
-
-// exit;
+?>

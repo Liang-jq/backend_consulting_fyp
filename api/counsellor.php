@@ -1,66 +1,88 @@
 <?php
-    header("Access-Control-Allow-Origin: http://localhost:5173");
-    header("Access-Control-Allow-Methods: POST, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type");
-    header("Content-Type: application/json");
+header("Access-Control-Allow-Origin: http://localhost:5173");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json");
 
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(200);
-        exit;
-    }
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
 
-    require_once '../db.php';
+require_once '../db.php';
 
-    $data = json_decode(file_get_contents("php://input"), true);
+$data = json_decode(file_get_contents("php://input"), true);
 
-    if(!$data){
-        echo json_encode(["error"=>"No data received"]);
-        exit;
-    }
+if(!$data){
+    echo json_encode(["error"=>"No data received"]);
+    exit;
+}
 
-    $name = $data['name'];
-    $email = $data['email'];
-    $password = password_hash($data['password'], PASSWORD_DEFAULT);
-    $matric = $data['matric_number'];
-    $phone = $data['phone'];
-    $languages = implode(",", $data['languages'])? implode(",", $data['languages']) : "";
-    $year = $data['year'];
-    $description = $data['description'];
+$name = $data['name'];
+$email = $data['email'];
+$password = password_hash($data['password'], PASSWORD_DEFAULT);
 
-    $stmt = $conn->prepare(
-        "INSERT INTO counsellor 
-        (name,email,password,matric_number,phone,languages,year,description,status)
-        VALUES (?,?,?,?,?,?,?,?,?)"
-    );
+$matric = $data['matric_number'];
+$phone = $data['phone'];
+$languages = !empty($data['languages']) ? implode(",", $data['languages']) : "";
+$year = $data['year'];
+$description = $data['description'];
 
-    $status = "pending";
+$role = 2; // counsellor role
 
-    $stmt->bind_param(
-    "sssssssss",
-    $name,
-    $email,
-    $password,
-    $matric,
-    $phone,
-    $languages,
-    $year,
-    $description,
-    $status
-    );
+/* INSERT INTO USERS TABLE FIRST */
 
-    if($stmt->execute()){
-        
-        echo json_encode([
-            "success"=>true,
-            "message"=>"Counsellor registered",
-            "id"=>$conn->insert_id
-        ]);
+$stmt1 = $conn->prepare("INSERT INTO user (name,email,password,role) VALUES (?,?,?,?)");
 
-    }else{
+$stmt1->bind_param(
+"sssi",
+$name,
+$email,
+$password,
+$role
+);
 
-        echo json_encode([
-            "success"=>false,
-            "error"=>$stmt->error
-        ]);
-    }
+if(!$stmt1->execute()){
+    echo json_encode([
+        "success"=>false,
+        "error"=>$stmt1->error
+    ]);
+    exit;
+}
+
+$user_id = $conn->insert_id;
+
+/* INSERT INTO COUNSELLOR TABLE */
+
+$status = "pending";
+
+$stmt2 = $conn->prepare(
+"INSERT INTO counsellor(user_id,matric_number,phone,languages,year,description,status) VALUES (?,?,?,?,?,?,?)");
+
+$stmt2->bind_param(
+"issssss",
+$user_id,
+$matric,
+$phone,
+$languages,
+$year,
+$description,
+$status
+);
+
+if($stmt2->execute()){
+
+    echo json_encode([
+        "success"=>true,
+        "message"=>"Counsellor registered",
+        "user_id"=>$user_id
+    ]);
+
+}else{
+
+    echo json_encode([
+        "success"=>false,
+        "error"=>$stmt2->error
+    ]);
+}
 ?>

@@ -1,59 +1,60 @@
 <?php
-    header("Access-Control-Allow-Origin: http://localhost:5173");
-    header("Access-Control-Allow-Methods: POST, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type");
-    header("Content-Type: application/json");
+header("Access-Control-Allow-Origin: http://localhost:5173");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json");
 
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(200);
-        exit;
-    }
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
 
-    require_once '../db.php';
+require_once '../db.php';
 
-    $data = json_decode(file_get_contents("php://input"), true);
+$data = json_decode(file_get_contents("php://input"), true);
 
-    if(!$data){
-        echo json_encode(["error"=>"No data received"]);
-        exit;
-    }
+if(!$data){
+    echo json_encode(["error"=>"No data received"]);
+    exit;
+}
 
-    $name = $data['name'];
-    $email = $data['email'];
-    $password = password_hash($data['password'], PASSWORD_DEFAULT);
-    $phone = $data['phone'];
-    $languages = implode(",", $data['languages'])? implode(",", $data['languages']) : "";
-    $description = $data['description'];
+$name = $data['name'];
+$email = $data['email'];
+$password = password_hash($data['password'], PASSWORD_DEFAULT);
+$phone = $data['phone'];
+$languages = !empty($data['languages']) ? implode(",", $data['languages']) : "";
+$description = $data['description'];
 
-    $stmt = $conn->prepare(
-        "INSERT INTO admin 
-        (name,email,password,phone,languages,description)
-        VALUES (?,?,?,?,?,?)"
-    );
+$role = 1; // Admin role = 1
 
-    $stmt->bind_param(
-    "ssssss",
-    $name,
-    $email,
-    $password,
-    $phone,
-    $languages,
-    $description
-    );
+/* INSERT INTO USERS TABLE */
+$stmt = $conn->prepare(
+    "INSERT INTO user (name,email,password,role) VALUES (?,?,?,?)"
+);
 
-    if($stmt->execute()){
-        
-        echo json_encode([
-            "success"=>true,
-            "message"=>"Admin registered",
-            "id"=>$conn->insert_id
-        ]);
+$stmt->bind_param("sssi",$name,$email,$password,$role);
 
-    }else{
+if(!$stmt->execute()){
+    echo json_encode([
+        "success"=>false,
+        "error"=>$stmt->error
+    ]);
+    exit;
+}
 
-        echo json_encode([
-            "success"=>false,
-            "error"=>$stmt->error
-        ]);
-    }
+$user_id = $conn->insert_id;
+
+/* If you want, you can also have an admin_details table for extra info */
+$stmt2 = $conn->prepare(
+    "INSERT INTO admin (user_id,phone,languages,description) VALUES (?,?,?,?)"
+);
+
+$stmt2->bind_param("isss",$user_id,$phone,$languages,$description);
+$stmt2->execute();
+
+echo json_encode([
+    "success"=>true,
+    "message"=>"Admin registered",
+    "user_id"=>$user_id
+]);
 ?>

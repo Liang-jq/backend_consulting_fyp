@@ -7,7 +7,7 @@ require_once '../db.php';
 
 $id = $_GET['id'];
 
-$stmt = $conn->prepare("SELECT name,languages,description FROM counsellor WHERE id=?");
+$stmt = $conn->prepare("SELECT u.name, c.languages, c.description FROM counsellor c JOIN user u ON c.user_id = u.id WHERE u.id = ?");
 $stmt->bind_param("i",$id);
 $stmt->execute();
 

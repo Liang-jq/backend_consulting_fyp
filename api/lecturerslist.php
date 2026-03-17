@@ -12,7 +12,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once '../db.php';
 
-$result = $conn->query("SELECT id,name,languages,description FROM admin");
+$result = $conn->query("SELECT u.id, u.name, a.languages, a.description
+FROM user u
+JOIN admin a ON u.id = a.user_id
+WHERE u.role = 1");
 
 $data = [];
 
