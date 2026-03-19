@@ -1,30 +1,30 @@
 <?php
 
-header("Access-Control-Allow-Origin: http://localhost:5173");
+header("Access-Control-Allow-Origin: http://localhost:5173"); //prevent the api error
 header("Access-Control-Allow-Methods: POST");
 header("Content-Type: application/json");
 
-require_once '../db.php';
+require_once '../db.php'; //db setting
 
-$data = json_decode(file_get_contents("php://input"), true);
+//field to take
+$counsellor_id = $_POST['counsellor_id'];
+$name = $_POST['name'];
+$email = $_POST['email'];
+$phone = $_POST['phone'];
+$type = $_POST['type'];
+$date = $_POST['date'];
+$time = $_POST['time'];
+$issue = $_POST['issue'];
 
-$counsellor_id = $data['counsellor_id'];
-$name = $data['name'];
-$email = $data['email'];
-$phone = $data['phone'];
-$type = $data['type'];
-$date = $data['date'];
-$time = $data['time'];
-$issue = $data['issue'];
-
+//insert to databse
 $stmt = $conn->prepare("
-INSERT INTO appointments 
+INSERT INTO appointment 
 (counsellor_id, name, email, phone, type, date, time, issue)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ");
 
 $stmt->bind_param(
-"isssssss",
+"isssssss",// data type 
 $counsellor_id,
 $name,
 $email,
